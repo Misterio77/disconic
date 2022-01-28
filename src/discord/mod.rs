@@ -3,7 +3,7 @@ use serenity::{
     async_trait,
     client::{Context, EventHandler},
     framework::standard::{
-        macros::{command, group},
+        macros::{command, group, hook},
         Args, CommandResult,
     },
     model::channel::Message,
@@ -27,6 +27,15 @@ pub struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {}
+
+#[hook]
+pub async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: CommandResult) {
+    if let Err(why) = error {
+        let text = format!("Error running {}: {:?}", cmd_name, why);
+        msg.reply(&ctx.http, &text).await.ok();
+        eprintln!("{}", &text);
+    }
+}
 
 #[command]
 #[aliases(s, p, play)]

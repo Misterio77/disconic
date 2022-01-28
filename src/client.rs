@@ -7,7 +7,7 @@ use sunk::Client as SubsonicClient;
 
 use std::{env, fs, io};
 
-use crate::discord::{Handler, GENERAL_GROUP};
+use crate::discord::{Handler, GENERAL_GROUP, after_hook};
 
 pub struct Client {
     ss_url: String,
@@ -50,7 +50,8 @@ impl Client {
             .framework(
                 StandardFramework::new()
                     .configure(|c| c.prefix("~"))
-                    .group(&GENERAL_GROUP),
+                    .group(&GENERAL_GROUP)
+                    .after(after_hook)
             )
             .type_map_insert::<MusicClient>(ss)
             .register_songbird()
