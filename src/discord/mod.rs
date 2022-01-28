@@ -14,7 +14,7 @@ use std::sync::Arc;
 use sunk::{
     search::{self, SearchPage},
     song::Song,
-    Media, Streamable,
+    Streamable,
 };
 
 use crate::MusicClient;
@@ -248,10 +248,15 @@ fn song_message(index: Option<usize>, metadata: &Metadata) -> String {
         None => "Current: ".into(),
     };
 
+    let duration = metadata
+        .duration
+        .map(|d| format!("{}:{}", d.as_secs() / 60, d.as_secs() % 60));
+
     let song_info = format!(
-        "{} - {} ",
+        "{} - {} ({})",
         metadata.artist.to_owned().unwrap_or_default(),
         metadata.track.to_owned().unwrap_or_default(),
+        duration.to_owned().unwrap_or_default(),
     );
 
     MessageBuilder::new()
@@ -283,8 +288,8 @@ async fn queue_song(
             .push("Added ")
             .push_bold_safe(song_info)
             .push("to the queue")
-            .push("\n")
-            .push(song.cover_art_url(client, 256)?)
+            // .push("\n")
+            // .push(song.cover_art_url(client, 256)?)
             .build(),
     )
     .await?;
