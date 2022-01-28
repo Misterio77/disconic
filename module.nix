@@ -15,11 +15,11 @@ in {
       '';
     };
     subsonicUrl = mkOption {
-      type = types.string;
+      type = types.str;
       description = "Subsonic library base API URL";
     };
     subsonicUser = mkOption {
-      type = types.string;
+      type = types.str;
       description = "Subsonic user login";
     };
     subsonicPasswordFile = mkOption {
