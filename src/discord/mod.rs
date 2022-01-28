@@ -281,11 +281,8 @@ async fn queue_song(
     client: &sunk::Client,
 ) -> Result<()> {
     let input = load_song(song, client).await?;
-    println!("{:?}", input);
     let call = join_channel(&ctx, &msg).await?;
-    println!("{:?}", call);
     let mut handler = call.lock().await;
-    println!("{:?}", handler);
     handler.enqueue_source(input);
 
     let song_info = format!(
@@ -337,5 +334,6 @@ async fn join_channel(
 
 async fn load_song(song: &Song, client: &sunk::Client) -> Result<Input> {
     let url = song.stream_url(&client)?;
+    println!("{:?}", url);
     Ok(songbird::ffmpeg(url).await?)
 }
