@@ -1,4 +1,4 @@
 pub mod client;
-pub use client::{MusicClient, Client};
+pub use client::{Client, MusicClient};
 
 pub mod discord;
