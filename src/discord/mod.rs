@@ -281,6 +281,7 @@ async fn queue_song(
     client: &sunk::Client,
 ) -> Result<()> {
     let input = load_song(song, client).await?;
+    println!("{:?}", input);
     let call = join_channel(&ctx, &msg).await?;
     let mut handler = call.lock().await;
     handler.enqueue_source(input);
