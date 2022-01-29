@@ -20,7 +20,9 @@ use sunk::{
 use crate::MusicClient;
 
 #[group]
-#[commands(song, random, skip, stop, pause, resume, queue, now_playing, remove)]
+#[commands(
+    song, random, skip, stop, pause, resume, queue, nowplaying, remove, album
+)]
 pub struct General;
 
 pub struct Handler;
@@ -31,9 +33,8 @@ impl EventHandler for Handler {}
 #[hook]
 pub async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: CommandResult) {
     if let Err(why) = error {
-        let text = format!("Error running {}: {:?}", cmd_name, why);
-        msg.reply(&ctx.http, &text).await.ok();
-        eprintln!("{}", &text);
+        msg.reply(&ctx.http, format!("{:?}", why)).await.ok();
+        eprintln!("{}: {:?}", cmd_name, why,);
     }
 }
 
@@ -54,17 +55,40 @@ async fn song(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .await?
         .songs;
 
-    match result.first() {
-        Some(song) => {
-            queue_song(ctx, msg, &song, &music_client).await?;
-            Ok(())
-        }
-        None => {
-            let text = "No song matching search found";
-            msg.reply(&ctx.http, text).await?;
-            Err(anyhow!(text).into())
-        }
+    let song = result
+        .first()
+        .ok_or_else(|| anyhow!("No song matching search found"))?;
+    queue_song(ctx, msg, &song, &music_client).await?;
+
+    Ok(())
+}
+
+#[command]
+#[aliases(a, album)]
+/// Play a named album
+async fn album(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let data = ctx.data.read().await;
+    let music_client = data
+        .get::<MusicClient>()
+        .expect("Couldn't retrieve music client");
+
+    let search_size = SearchPage::new().with_size(1);
+    let ignore = search::NONE;
+
+    let result = music_client
+        .search(args.rest(), ignore, search_size, ignore)
+        .await?
+        .albums;
+
+    let album = result
+        .first()
+        .ok_or_else(|| anyhow!("No albums matching search found"))?;
+
+    for song in album.songs(music_client).await? {
+        queue_song(ctx, msg, &song, &music_client).await?;
     }
+
+    Ok(())
 }
 
 #[command]
@@ -78,41 +102,12 @@ async fn random(ctx: &Context, msg: &Message) -> CommandResult {
 
     let result = Song::random(&music_client, 1).await?;
 
-    match result.first() {
-        Some(song) => {
-            queue_song(ctx, msg, &song, &music_client).await?;
-            Ok(())
-        }
-        None => {
-            let text = "No song found";
-            msg.reply(&ctx.http, text).await?;
-            Err(anyhow!(text).into())
-        }
-    }
-}
+    let song = result
+        .first()
+        .ok_or_else(|| anyhow!("No song matching search found"))?;
+    queue_song(ctx, msg, &song, &music_client).await?;
 
-#[command]
-#[aliases(pl)]
-/// Play a playlist
-async fn playlist(ctx: &Context, msg: &Message) -> CommandResult {
-    let data = ctx.data.read().await;
-    let music_client = data
-        .get::<MusicClient>()
-        .expect("Couldn't retrieve music client");
-
-    let result = Song::random(&music_client, 1).await?;
-
-    match result.first() {
-        Some(song) => {
-            queue_song(ctx, msg, &song, &music_client).await?;
-            Ok(())
-        }
-        None => {
-            let text = "No song found";
-            msg.reply(&ctx.http, text).await?;
-            Err(anyhow!(text).into())
-        }
-    }
+    Ok(())
 }
 
 #[command]
@@ -150,14 +145,9 @@ async fn pause(ctx: &Context, msg: &Message) -> CommandResult {
     let handler = call.lock().await;
 
     let queue = handler.queue();
-    let current = match queue.current() {
-        Some(channel) => channel,
-        None => {
-            let text = "Not currently playing";
-            msg.reply(ctx, text).await?;
-            return Err(anyhow!(text).into());
-        }
-    };
+    let current = queue
+        .current()
+        .ok_or_else(|| anyhow!("Not currently playing"))?;
     current.pause()?;
 
     msg.reply(&ctx.http, "Paused playing").await?;
@@ -181,23 +171,19 @@ async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-#[aliases(now_playing, now, np, playing)]
+#[aliases(nowplaying, now, np, playing)]
 /// Show currently playing song
-async fn now_playing(ctx: &Context, msg: &Message) -> CommandResult {
+async fn nowplaying(ctx: &Context, msg: &Message) -> CommandResult {
     let call = join_channel(&ctx, &msg).await?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
-    let current = match queue.current() {
-        Some(channel) => channel,
-        None => {
-            let text = "Not currently playing";
-            msg.reply(ctx, text).await?;
-            return Err(anyhow!(text).into());
-        }
-    };
-    let text = song_message(None, current.metadata());
-    msg.reply(&ctx.http, text).await?;
+    let current = queue
+        .current()
+        .ok_or_else(|| anyhow!("Not currently playing"))?;
+
+    msg.reply(&ctx.http, song_message(None, current.metadata()))
+        .await?;
 
     Ok(())
 }
@@ -235,18 +221,20 @@ async fn remove(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let index = args.single()?;
 
     let queue = handler.queue();
-    let text = if let Some(track) = queue.current_queue().get(index) {
-        queue.dequeue(index);
-        let metadata = track.metadata();
-        format!(
-            "Removed track: {} - {} ",
-            metadata.artist.to_owned().unwrap_or_default(),
-            metadata.track.to_owned().unwrap_or_default(),
-        )
-    } else {
-        "No song with that index".into()
-    };
+    let current_queue = queue.current_queue();
 
+    let track = current_queue
+        .get(index)
+        .ok_or_else(|| anyhow!("No song with that index"))?;
+
+    queue.dequeue(index);
+
+    let metadata = track.metadata();
+    let text = format!(
+        "Removed track: {} - {} ",
+        metadata.artist.to_owned().unwrap_or_default(),
+        metadata.track.to_owned().unwrap_or_default(),
+    );
     msg.reply(&ctx.http, text).await?;
     Ok(())
 }
@@ -322,9 +310,9 @@ async fn join_channel(
     let connect_to = match caller_channel {
         Some(channel) => channel,
         None => {
-            let text = "You must be in a voice channel to use this command";
-            msg.reply(ctx, text).await?;
-            return Err(anyhow!(text));
+            return Err(anyhow!(
+                "You must be in a voice channel to use this command"
+            ));
         }
     };
 
@@ -335,6 +323,5 @@ async fn join_channel(
 
 async fn load_song(song: &Song, client: &sunk::Client) -> Result<Input> {
     let url = song.stream_url(&client)?;
-    println!("{:?}", url);
     Ok(songbird::ffmpeg(url).await?)
 }
