@@ -99,6 +99,8 @@ async fn song(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let song = result
         .first()
         .ok_or_else(|| anyhow!("No song matching search found"))?;
+
+    log::info!("Found song {song:?}");
     queue_song(ctx, msg, song, music_client).await?;
 
     Ok(())
@@ -319,6 +321,8 @@ async fn queue_song(
         .get(guild.id)
         .ok_or_else(|| anyhow!("Not currently in a channel"))?;
 
+    log::info!("Queueing song {song:?}");
+    log::info!("Will play in call {call:?}");
     let mut handler = call.lock().await;
     let input = load_song(song, client).await?;
     handler.enqueue_source(input);
@@ -357,8 +361,11 @@ async fn get_handler(ctx: &Context, msg: &Message) -> Result<Arc<Mutex<Call>>> {
 }
 
 async fn load_song(song: &Song, client: &sunk::Client) -> Result<Input> {
+    log::info!("Loading song {song:?}");
     let url = song.stream_url(client)?;
+    log::info!("With url {url:?}");
     let mut input = songbird::ffmpeg(&url).await?;
+    log::info!("Created songbird input");
     input.metadata.track = Some(song.title.clone());
     input.metadata.artist = song.artist.clone();
     input.metadata.source_url = Some(url);
