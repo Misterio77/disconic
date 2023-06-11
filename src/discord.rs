@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context as ErrContext, Result};
 use serenity::{
+    all::{ChannelId, GuildId},
     async_trait,
     client::{Context, EventHandler},
     framework::standard::{
@@ -7,12 +8,13 @@ use serenity::{
         Args, CommandResult,
     },
     model::{channel::Message, gateway::Ready},
-    prelude::Mutex,
+    prelude::TypeMapKey,
     utils::MessageBuilder,
 };
 use songbird::{
-    input::{Input, Metadata},
-    Call,
+    input::HttpRequest,
+    tracks::{Track, TrackHandle},
+    Songbird,
 };
 use sunk::{
     search::{self, SearchPage},
@@ -48,37 +50,26 @@ pub async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: Com
 }
 
 #[command]
+#[only_in(guilds)]
 async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).unwrap();
-    let guild_id = guild.id;
-
-    let manager = songbird::get(ctx)
-        .await
-        .ok_or_else(|| anyhow!("Couldn't start manager"))?;
-
-    manager.remove(guild_id).await?;
+    let guild = get_guild(ctx, msg)?;
+    let manager = get_manager(ctx).await?;
+    manager.remove(guild).await?;
     Ok(())
 }
 
 #[command]
+#[only_in(guilds)]
 async fn join(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).unwrap();
-    let guild_id = guild.id;
-
-    let channel = guild
-        .voice_states
-        .get(&msg.author.id)
-        .and_then(|voice_state| voice_state.channel_id)
-        .ok_or_else(|| anyhow!("You must be in a voice channel to use this command"))?;
-
-    let manager = songbird::get(ctx)
-        .await
-        .ok_or_else(|| anyhow!("Couldn't start manager"))?;
-    let _handler = manager.join(guild_id, channel).await;
+    let guild = get_guild(ctx, msg)?;
+    let channel = get_channel(ctx, msg)?;
+    let manager = get_manager(ctx).await?;
+    let _handler = manager.join(guild, channel).await;
     Ok(())
 }
 
 #[command]
+#[only_in(guilds)]
 #[aliases(s, p, play)]
 /// Play a named song
 async fn song(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
@@ -98,6 +89,7 @@ async fn song(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     let song = result
         .first()
+        .map(ToOwned::to_owned)
         .ok_or_else(|| anyhow!("No song matching search found"))?;
 
     log::info!("Found song {song:?}");
@@ -107,6 +99,7 @@ async fn song(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 }
 
 #[command]
+#[only_in(guilds)]
 #[aliases(a, album)]
 /// Play a named album
 async fn album(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
@@ -128,13 +121,14 @@ async fn album(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .ok_or_else(|| anyhow!("No albums matching search found"))?;
 
     for song in album.songs(music_client).await? {
-        queue_song(ctx, msg, &song, music_client).await?;
+        queue_song(ctx, msg, song, music_client).await?;
     }
 
     Ok(())
 }
 
 #[command]
+#[only_in(guilds)]
 #[aliases(r, rand)]
 /// Play a random song
 async fn random(ctx: &Context, msg: &Message) -> CommandResult {
@@ -145,8 +139,9 @@ async fn random(ctx: &Context, msg: &Message) -> CommandResult {
 
     let result = Song::random(music_client, 1).await?;
 
-    let song = result
+    let song: Song = result
         .first()
+        .map(ToOwned::to_owned)
         .ok_or_else(|| anyhow!("No song matching search found"))?;
     queue_song(ctx, msg, song, music_client).await?;
 
@@ -154,9 +149,14 @@ async fn random(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[only_in(guilds)]
 /// Skip current song
 async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_call(ctx, msg).await?;
+    let manager = get_manager(ctx).await?;
+    let guild = get_guild(ctx, msg)?;
+    let call = manager
+        .get(guild)
+        .ok_or_else(|| anyhow!("Not in a voice channel"))?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -168,9 +168,14 @@ async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[only_in(guilds)]
 /// Clear queue and stop playing
 async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_call(ctx, msg).await?;
+    let manager = get_manager(ctx).await?;
+    let guild = get_guild(ctx, msg)?;
+    let call = manager
+        .get(guild)
+        .ok_or_else(|| anyhow!("Not in a voice channel"))?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -182,9 +187,14 @@ async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[only_in(guilds)]
 /// Pause playing current song
 async fn pause(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_call(ctx, msg).await?;
+    let manager = get_manager(ctx).await?;
+    let guild = get_guild(ctx, msg)?;
+    let call = manager
+        .get(guild)
+        .ok_or_else(|| anyhow!("Not in a voice channel"))?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -199,10 +209,15 @@ async fn pause(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[only_in(guilds)]
 #[aliases(resume)]
 /// Resume playing current song
 async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_call(ctx, msg).await?;
+    let manager = get_manager(ctx).await?;
+    let guild = get_guild(ctx, msg)?;
+    let call = manager
+        .get(guild)
+        .ok_or_else(|| anyhow!("Not in a voice channel"))?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -214,10 +229,15 @@ async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[only_in(guilds)]
 #[aliases(nowplaying, now, np, playing)]
 /// Show currently playing song
 async fn nowplaying(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_call(ctx, msg).await?;
+    let manager = get_manager(ctx).await?;
+    let guild = get_guild(ctx, msg)?;
+    let call = manager
+        .get(guild)
+        .ok_or_else(|| anyhow!("Not in a voice channel"))?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -225,17 +245,27 @@ async fn nowplaying(ctx: &Context, msg: &Message) -> CommandResult {
         .current()
         .ok_or_else(|| anyhow!("Not currently playing"))?;
 
-    msg.reply(&ctx.http, song_message(None, current.metadata()))
-        .await?;
+    let song = get_song(&current).await?;
+    let text = format!(
+        "**Currently playing**: {} - {}",
+        song.title,
+        song.artist.as_deref().unwrap_or_default()
+    );
+    msg.reply(&ctx.http, text).await?;
 
     Ok(())
 }
 
 #[command]
+#[only_in(guilds)]
 #[aliases(q)]
 /// Show song queue
 async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_call(ctx, msg).await?;
+    let manager = get_manager(ctx).await?;
+    let guild = get_guild(ctx, msg)?;
+    let call = manager
+        .get(guild)
+        .ok_or_else(|| anyhow!("Not in a voice channel"))?;
     let handler = call.lock().await;
 
     let current_queue = handler.queue().current_queue();
@@ -246,7 +276,14 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
         let mut text = String::new();
         text.push_str("Next songs in queue:\n");
         for (i, track) in current_queue.iter().enumerate() {
-            text.push_str(&song_message(Some(i), track.metadata()));
+            let song = get_song(track).await?;
+            let song_text = format!(
+                "**{}.** {} - {}",
+                i,
+                song.title,
+                song.artist.as_deref().unwrap_or_default()
+            );
+            text.push_str(&song_text);
             text.push('\n');
         }
         text
@@ -257,73 +294,57 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[only_in(guilds)]
 /// Remove song from queue, given id
 async fn remove(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let call = get_call(ctx, msg).await?;
+    let manager = get_manager(ctx).await?;
+    let guild = get_guild(ctx, msg)?;
+    let call = manager
+        .get(guild)
+        .ok_or_else(|| anyhow!("Not in a voice channel"))?;
     let handler = call.lock().await;
 
     let index = args.single()?;
 
     let queue = handler.queue();
-    let current_queue = queue.current_queue();
-
-    let track = current_queue
-        .get(index)
-        .ok_or_else(|| anyhow!("No song with that index"))?;
-
-    queue.dequeue(index);
-
-    let metadata = track.metadata();
-    let text = format!(
-        "Removed track: {} - {} ",
-        metadata.artist.to_owned().unwrap_or_default(),
-        metadata.track.to_owned().unwrap_or_default(),
-    );
+    let track = queue
+        .dequeue(index)
+        .ok_or_else(|| anyhow!("Song not found"))?;
+    let song = get_song(&track).await?;
+    let text = format!("Removed track: {}", song.title);
     msg.reply(&ctx.http, text).await?;
     Ok(())
 }
 
-fn song_message(index: Option<usize>, metadata: &Metadata) -> String {
-    let prefix = match index {
-        Some(i) => format!("{}. ", i),
-        None => "Current: ".into(),
-    };
+// ==========================
+// ==========================
+// ==========================
 
-    let duration = metadata
-        .duration
-        .map(|d| format!("{}:{}", d.as_secs() / 60, d.as_secs() % 60));
-
-    let song_info = format!(
-        "{} - {} ({})",
-        metadata.artist.to_owned().unwrap_or_default(),
-        metadata.track.to_owned().unwrap_or_default(),
-        duration.unwrap_or_default(),
-    );
-
-    MessageBuilder::new()
-        .push_bold(prefix)
-        .push(song_info)
-        .build()
+struct SongHandler;
+impl TypeMapKey for SongHandler {
+    type Value = Song;
 }
 
-async fn queue_song(
-    ctx: &Context,
-    msg: &Message,
-    song: &Song,
-    client: &sunk::Client,
-) -> Result<()> {
-    log::info!("Queueing song {song:?}");
-    let call = get_call(ctx, msg).await?;
-    log::info!("Will play in call {call:?}");
+async fn queue_song(ctx: &Context, msg: &Message, song: Song, client: &sunk::Client) -> Result<()> {
+    let manager = get_manager(ctx).await?;
+    let guild = get_guild(ctx, msg)?;
+    let call = manager
+        .get(guild)
+        .ok_or_else(|| anyhow!("Not in a voice channel"))?;
     let mut handler = call.lock().await;
-    let input = load_song(song, client).await?;
-    handler.enqueue_source(input);
 
     let song_info = format!(
         "{} - {} ",
-        song.artist.to_owned().unwrap_or_default(),
+        song.artist.as_deref().unwrap_or_default(),
         song.title,
     );
+
+    let track = load_song(&song, client).await?;
+    let track_handle = handler.enqueue(track).await;
+    {
+        let mut type_map = track_handle.typemap().write().await;
+        type_map.insert::<SongHandler>(song)
+    }
 
     msg.reply(
         &ctx.http,
@@ -340,26 +361,43 @@ async fn queue_song(
     Ok(())
 }
 
-async fn get_call(ctx: &Context, msg: &Message) -> Result<Arc<Mutex<Call>>> {
-    let guild = msg
-        .guild(&ctx.cache)
-        .ok_or_else(|| anyhow!("Couldn't get guild id"))?;
+fn get_guild(ctx: &Context, msg: &Message) -> Result<GuildId> {
+    let guild = msg.guild(&ctx.cache).unwrap();
+    Ok(guild.id)
+}
+
+fn get_channel(ctx: &Context, msg: &Message) -> Result<ChannelId> {
+    let guild = msg.guild(&ctx.cache).unwrap();
+    let channel_id = guild
+        .voice_states
+        .get(&msg.author.id)
+        .and_then(|voice_state| voice_state.channel_id)
+        .ok_or_else(|| anyhow!("You must be in a voice channel to use this command"))?;
+
+    Ok(channel_id)
+}
+
+async fn get_song(track: &TrackHandle) -> Result<Song> {
+    let song = track
+        .typemap()
+        .read()
+        .await
+        .get::<SongHandler>()
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| anyhow!("Sound information not found"))?;
+    Ok(song)
+}
+
+async fn get_manager(ctx: &Context) -> Result<Arc<Songbird>> {
     let manager = songbird::get(ctx)
         .await
         .ok_or_else(|| anyhow!("Couldn't start manager"))?;
-    Ok(manager
-        .get(guild.id)
-        .ok_or_else(|| anyhow!("Not currently in a channel"))?)
+    Ok(manager)
 }
 
-async fn load_song(song: &Song, client: &sunk::Client) -> Result<Input> {
+async fn load_song(song: &Song, client: &sunk::Client) -> Result<Track> {
     log::info!("Loading song {song:?}");
     let url = song.stream_url(client)?;
-    log::info!("With url {url:?}");
-    let mut input = songbird::ffmpeg(&url).await?;
-    log::info!("Created songbird input");
-    input.metadata.track = Some(song.title.clone());
-    input.metadata.artist = song.artist.clone();
-    input.metadata.source_url = Some(url);
-    Ok(input)
+    let track: Track = HttpRequest::new(client.reqclient.clone(), url).into();
+    Ok(track)
 }

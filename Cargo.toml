@@ -28,7 +28,7 @@ features = [ "rustls-tls" ]
 version = "0.11"
 git = "https://github.com/serenity-rs/serenity"
 branch = "next"
-features = [ "voice" ]
+features = [ "client", "standard_framework", "voice", "rustls_backend" ]
 
 [dependencies.songbird]
 version = "0.3"
@@ -36,9 +36,13 @@ git = "https://github.com/serenity-rs/songbird"
 branch = "next"
 features = [ "builtin-queue" ]
 
+[dependencies.symphonia]
+version = "0.5"
+features = ["aac", "mp3"]
+
 [dependencies.tokio]
 version = "1.0"
-features = ["full"]
+features = ["full", "rt-multi-thread", "signal"]
 
 [dependencies.anyhow]
 version = "1.0"

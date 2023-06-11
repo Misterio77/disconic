@@ -49,9 +49,10 @@ impl Client {
     pub async fn discord(&self, ss: SubsonicClient) -> Result<DiscordClient> {
         let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
         let framework = StandardFramework::new()
-            .configure(|c| c.prefix("~"))
             .group(&GENERAL_GROUP)
             .after(after_hook);
+
+        framework.configure(|c| c.prefix("~"));
 
         let client = DiscordClient::builder(&self.discord_token, intents)
             .event_handler(Handler)
