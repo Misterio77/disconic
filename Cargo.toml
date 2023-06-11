@@ -1,11 +1,28 @@
 [package]
 name = "disconic"
 description = "Discord bot for interacting with subsonic music libraries"
-version = "0.2.1"
+version = "1.0.0"
 authors = [ "Gabriel Fontes <eu@misterio.me>" ]
 edition = "2018"
 homepage = "https://misterio.me"
 license = "AGPL-3.0-or-later"
+
+
+[patch.crates-io.sunk]
+git = "https://github.com/Misterio77/sunk"
+
+[patch.crates-io.serenity]
+git = "https://github.com/serenity-rs/serenity"
+branch = "next"
+
+[patch.crates-io.songbird]
+git = "https://github.com/serenity-rs/songbird"
+branch = "next"
+
+[patch.crates-io.poise]
+git = "https://github.com/serenity-rs/poise"
+branch = "serenity-next"
+
 
 [dependencies.log]
 version = "0.4"
@@ -20,26 +37,19 @@ features = [ "rustls-tls" ]
 
 [dependencies.sunk]
 version = "0.1"
-git = "https://github.com/Misterio77/sunk"
 default-features = false
 features = [ "rustls-tls" ]
 
 [dependencies.serenity]
 version = "0.11"
-git = "https://github.com/serenity-rs/serenity"
-branch = "next"
 features = [ "client", "voice", "rustls_backend" ]
 
 [dependencies.songbird]
 version = "0.3"
-git = "https://github.com/serenity-rs/songbird"
-branch = "next"
 features = [ "builtin-queue" ]
 
 [dependencies.poise]
 version = "0.4"
-git = "https://github.com/serenity-rs/poise"
-branch = "serenity-next"
 
 [dependencies.symphonia]
 version = "0.5"
