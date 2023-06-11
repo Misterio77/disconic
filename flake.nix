@@ -17,13 +17,11 @@
     let
       forAllSystems = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ];
       forAllPkgs = f: forAllSystems (sys: f pkgsFor.${sys});
-      pkgsFor = forAllSystems (system: import nixpkgs {
-        inherit system;
-        overlays = [ rust-overlay.overlays.default ];
-      });
+      pkgsFor = nixpkgs.legacyPackages;
+
       mkPackage = pkgs: pkgs.callPackage ./default.nix {
         rustPlatform = pkgs.makeRustPlatform rec {
-          rustc = pkgs.rust-bin.stable.latest.default;
+          rustc = rust-overlay.packages.${pkgs.system}.rust;
           cargo = rustc;
         };
       };
