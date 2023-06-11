@@ -349,10 +349,18 @@ fn get_channel(ctx: &Context, msg: &Message) -> Result<ChannelId> {
 async fn get_call(ctx: &Context, msg: &Message) -> Result<Arc<Mutex<songbird::Call>>> {
     let manager = get_manager(ctx).await?;
     let guild = get_guild(ctx, msg)?;
-    let call = manager
-        .get(guild)
-        .ok_or_else(|| anyhow!("Not in a voice channel"))?;
-    Ok(call)
+    let call = manager.get(guild);
+
+    if let Some(c) = call {
+        Ok(c)
+    } else {
+        let channel = get_channel(ctx, msg)?;
+        log::warn!("Not in a voice channel, trying to join");
+        let _handler = manager.join(guild, channel).await;
+        manager
+            .get(guild)
+            .ok_or_else(|| anyhow!("Not in a voice channel, try running 'join'"))
+    }
 }
 
 async fn get_song(track: &TrackHandle) -> Result<Song> {
