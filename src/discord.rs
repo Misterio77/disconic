@@ -1,5 +1,4 @@
-use anyhow::{anyhow, Result};
-use log::warn;
+use anyhow::{anyhow, Context as ErrContext, Result};
 use serenity::{
     async_trait,
     client::{Context, EventHandler},
@@ -93,7 +92,8 @@ async fn song(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     let result = music_client
         .search(args.rest(), ignore, ignore, search_size)
-        .await?
+        .await
+        .with_context(|| anyhow!("Could not search for song"))?
         .songs;
 
     let song = result
@@ -156,7 +156,7 @@ async fn random(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 /// Skip current song
 async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_handler(ctx, msg).await?;
+    let call = get_call(ctx, msg).await?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -170,7 +170,7 @@ async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 /// Clear queue and stop playing
 async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_handler(ctx, msg).await?;
+    let call = get_call(ctx, msg).await?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -184,7 +184,7 @@ async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 /// Pause playing current song
 async fn pause(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_handler(ctx, msg).await?;
+    let call = get_call(ctx, msg).await?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -202,7 +202,7 @@ async fn pause(ctx: &Context, msg: &Message) -> CommandResult {
 #[aliases(resume)]
 /// Resume playing current song
 async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_handler(ctx, msg).await?;
+    let call = get_call(ctx, msg).await?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -217,7 +217,7 @@ async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
 #[aliases(nowplaying, now, np, playing)]
 /// Show currently playing song
 async fn nowplaying(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_handler(ctx, msg).await?;
+    let call = get_call(ctx, msg).await?;
     let handler = call.lock().await;
 
     let queue = handler.queue();
@@ -235,7 +235,7 @@ async fn nowplaying(ctx: &Context, msg: &Message) -> CommandResult {
 #[aliases(q)]
 /// Show song queue
 async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
-    let call = get_handler(ctx, msg).await?;
+    let call = get_call(ctx, msg).await?;
     let handler = call.lock().await;
 
     let current_queue = handler.queue().current_queue();
@@ -244,6 +244,7 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
         "No songs queued".into()
     } else {
         let mut text = String::new();
+        text.push_str("Next songs in queue:\n");
         for (i, track) in current_queue.iter().enumerate() {
             text.push_str(&song_message(Some(i), track.metadata()));
             text.push('\n');
@@ -258,7 +259,7 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 /// Remove song from queue, given id
 async fn remove(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let call = get_handler(ctx, msg).await?;
+    let call = get_call(ctx, msg).await?;
     let handler = call.lock().await;
 
     let index = args.single()?;
@@ -284,7 +285,7 @@ async fn remove(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
 fn song_message(index: Option<usize>, metadata: &Metadata) -> String {
     let prefix = match index {
-        Some(i) => format!("- {}: ", i),
+        Some(i) => format!("{}. ", i),
         None => "Current: ".into(),
     };
 
@@ -311,17 +312,8 @@ async fn queue_song(
     song: &Song,
     client: &sunk::Client,
 ) -> Result<()> {
-    let guild = msg
-        .guild(&ctx.cache)
-        .ok_or_else(|| anyhow!("Couldn't get guild id"))?;
-    let manager = songbird::get(ctx)
-        .await
-        .ok_or_else(|| anyhow!("Couldn't start manager"))?;
-    let call = manager
-        .get(guild.id)
-        .ok_or_else(|| anyhow!("Not currently in a channel"))?;
-
     log::info!("Queueing song {song:?}");
+    let call = get_call(ctx, msg).await?;
     log::info!("Will play in call {call:?}");
     let mut handler = call.lock().await;
     let input = load_song(song, client).await?;
@@ -348,7 +340,7 @@ async fn queue_song(
     Ok(())
 }
 
-async fn get_handler(ctx: &Context, msg: &Message) -> Result<Arc<Mutex<Call>>> {
+async fn get_call(ctx: &Context, msg: &Message) -> Result<Arc<Mutex<Call>>> {
     let guild = msg
         .guild(&ctx.cache)
         .ok_or_else(|| anyhow!("Couldn't get guild id"))?;

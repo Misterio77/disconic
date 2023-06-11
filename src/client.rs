@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context as ErrContext, Result};
 use serenity::{
     client::Client as DiscordClient,
     framework::standard::StandardFramework,
@@ -47,27 +47,32 @@ impl Client {
     }
 
     pub async fn discord(&self, ss: SubsonicClient) -> Result<DiscordClient> {
-        Ok(
-            DiscordClient::builder(&self.discord_token, GatewayIntents::default())
-                .event_handler(Handler)
-                .framework(
-                    StandardFramework::new()
-                        .configure(|c| c.prefix("~"))
-                        .group(&GENERAL_GROUP)
-                        .after(after_hook),
-                )
-                .type_map_insert::<MusicClient>(ss)
-                .register_songbird()
-                .await?,
-        )
+        let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+        let framework = StandardFramework::new()
+            .configure(|c| c.prefix("~"))
+            .group(&GENERAL_GROUP)
+            .after(after_hook);
+
+        let client = DiscordClient::builder(&self.discord_token, intents)
+            .event_handler(Handler)
+            .framework(framework)
+            .type_map_insert::<MusicClient>(ss)
+            .register_songbird()
+            .await?;
+
+        Ok(client)
     }
 
     pub async fn subsonic(&self) -> Result<SubsonicClient> {
-        Ok(SubsonicClient::new(
-            &self.ss_url,
-            &self.ss_user,
-            &self.ss_password,
-        )?)
+        let client = SubsonicClient::new(&self.ss_url, &self.ss_user, &self.ss_password)?;
+        log::info!("Created subsonic client: {client:?}");
+        // Check that connection works
+        client
+            .ping()
+            .await
+            .with_context(|| "Could not connect to subsonic server.")?;
+
+        Ok(client)
     }
 }
 
