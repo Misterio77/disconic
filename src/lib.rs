@@ -1,4 +1,3 @@
-pub mod client;
-pub use client::{Client, MusicClient};
-
+pub mod config;
 pub mod discord;
+pub mod handles;

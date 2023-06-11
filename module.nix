@@ -30,22 +30,24 @@ in {
       type = types.path;
       description = "File path containing discord token";
     };
+    extraArgs = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Extra arguments to pass to disconic.";
+    };
   };
 
   config = mkIf cfg.enable {
     systemd.services.disconic = {
       description = "Disconic, a Discord Subsonic Bot";
       wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        ExecStart = "${cfg.package}/bin/disconic";
-        Restart = "on-failure";
-        Environment = [
-          "SUBSONIC_URL=${cfg.subsonicUrl}"
-          "SUBSONIC_USER=${cfg.subsonicUser}"
-          "SUBSONIC_PASSWORD_FILE=${cfg.subsonicPasswordFile}"
-          "DISCORD_TOKEN_FILE=${cfg.discordTokenFile}"
-        ];
-      };
+      serviceConfig.ExecStart = lib.escapeShellArgs ([
+        (lib.getExe cfg.package)
+        "--subsonic-url=${cfg.subsonicUrl}"
+        "--subsonic-user=${cfg.subsonicUser}"
+        "--subsonic-password=$(cat ${cfg.subsonicPasswordFile})"
+        "--discord-token=$(cat ${cfg.discordTokenFile}"
+      ] ++ cfg.extraArgs);
     };
   };
 }

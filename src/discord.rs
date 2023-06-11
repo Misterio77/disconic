@@ -8,7 +8,6 @@ use serenity::{
         Args, CommandResult,
     },
     model::{channel::Message, gateway::Ready},
-    prelude::TypeMapKey,
     utils::MessageBuilder,
 };
 use songbird::{
@@ -25,7 +24,7 @@ use tokio::sync::Mutex;
 
 use std::sync::Arc;
 
-use crate::MusicClient;
+use crate::handles::{SubsonicClientHandle, SubsonicSongHandle};
 
 #[group]
 #[commands(
@@ -38,7 +37,7 @@ pub struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+        log::info!("{} is connected!", ready.user.name);
     }
 }
 
@@ -76,7 +75,7 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 async fn song(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let data = ctx.data.read().await;
     let music_client = data
-        .get::<MusicClient>()
+        .get::<SubsonicClientHandle>()
         .expect("Couldn't retrieve music client");
 
     let search_size = SearchPage::new().with_size(1);
@@ -114,7 +113,7 @@ async fn song(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 async fn album(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let data = ctx.data.read().await;
     let music_client = data
-        .get::<MusicClient>()
+        .get::<SubsonicClientHandle>()
         .expect("Couldn't retrieve music client");
 
     let search_size = SearchPage::new().with_size(1);
@@ -153,7 +152,7 @@ async fn album(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 async fn random(ctx: &Context, msg: &Message) -> CommandResult {
     let data = ctx.data.read().await;
     let music_client = data
-        .get::<MusicClient>()
+        .get::<SubsonicClientHandle>()
         .expect("Couldn't retrieve music client");
 
     let result = Song::random(music_client, 1).await?;
@@ -334,11 +333,6 @@ async fn remove(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 // ==========================
 // ==========================
 
-struct SongHandler;
-impl TypeMapKey for SongHandler {
-    type Value = Song;
-}
-
 async fn queue_song(
     ctx: &Context,
     msg: &Message,
@@ -351,7 +345,7 @@ async fn queue_song(
     let track = load_song(song, client).await?;
     let track_handle = handler.enqueue(track).await;
     let mut type_map = track_handle.typemap().write().await;
-    type_map.insert::<SongHandler>(song.clone());
+    type_map.insert::<SubsonicSongHandle>(song.clone());
 
     Ok(())
 }
@@ -394,7 +388,7 @@ async fn get_song(track: &TrackHandle) -> Result<Song> {
         .typemap()
         .read()
         .await
-        .get::<SongHandler>()
+        .get::<SubsonicSongHandle>()
         .map(ToOwned::to_owned)
         .ok_or_else(|| anyhow!("Sound information not found"))?;
     Ok(song)

@@ -1,16 +1,18 @@
 use anyhow::Result;
+use clap::Parser;
 
-use disconic::Client;
+use disconic::config::Config;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    env_logger::init();
 
-    let client = Client::from_env().await?;
-    let subsonic = client.subsonic().await?;
-    let mut discord = client.discord(subsonic).await?;
+    let config = Config::parse();
+    let logger = config.logger();
+    let subsonic = config.subsonic().await?;
+    let mut discord = config.discord(subsonic).await?;
 
+    logger.init()?;
     discord.start().await?;
 
     Ok(())
