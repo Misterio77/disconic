@@ -7,8 +7,8 @@ in rustPlatform.buildRustPackage {
 
   src = lib.cleanSource ./.;
 
-  nativeBuildInputs = [ pkg-config ];
-  buildInputs = [ autoconf alsa-lib automake libopus makeWrapper ffmpeg ];
+  nativeBuildInputs = [ pkg-config autoconf automake makeWrapper ];
+  buildInputs = [ alsa-lib libopus ffmpeg ];
 
   cargoLock = {
     lockFile = ./Cargo.lock;
