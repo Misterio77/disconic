@@ -256,7 +256,7 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
             let song = get_song(track).await?;
             let song_text = format!(
                 "**{}.** {} - {}",
-                i,
+                i+1,
                 song.title,
                 song.artist.as_deref().unwrap_or_default()
             );
