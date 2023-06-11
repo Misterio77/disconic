@@ -1,7 +1,7 @@
 { lib, rustPlatform, pkg-config, autoconf, alsa-lib, automake, libopus, ffmpeg, makeWrapper }:
 
 let manifest = (lib.importTOML ./Cargo.toml).package;
-in rustPlatform.buildRustPackage rec {
+in rustPlatform.buildRustPackage {
   pname = manifest.name;
   version = manifest.version;
 
@@ -13,7 +13,7 @@ in rustPlatform.buildRustPackage rec {
   cargoLock = {
     lockFile = ./Cargo.lock;
      outputHashes = {
-       "sunk-0.1.2" = "sha256-VruqNDbWbjdarXiyR1OHcXsR1MvTmCM5j+v2ZpcG5IA=";
+       "sunk-0.1.2" = "sha256-edipTPS8d6D2Rf6WFwutycI93YjuWK/Z5GQR2HHIxAU=";
      };
   };
 
@@ -22,7 +22,7 @@ in rustPlatform.buildRustPackage rec {
   '';
 
   meta = with lib; {
-    description = manifest.desciption;
+    description = manifest.description;
     homepage = manifest.homepage;
     license = licenses.agpl3Plus;
     platforms = platforms.all;

@@ -7,10 +7,11 @@ edition = "2018"
 homepage = "https://misterio.me"
 license = "AGPL-3.0-or-later"
 
-[dependencies.serenity]
-version = "0.10"
-default-features = false
-features = [ "default_no_backend", "rustls_backend" ]
+[dependencies.log]
+version = "0.4"
+
+[dependencies.env_logger]
+version = "0.9"
 
 [dependencies.reqwest]
 version = "0.11"
@@ -23,8 +24,12 @@ git = "https://github.com/Misterio77/sunk"
 default-features = false
 features = [ "rustls-tls" ]
 
+[dependencies.serenity]
+version = "0.11"
+features = [ "voice" ]
+
 [dependencies.songbird]
-version = "0.2"
+version = "0.3"
 default-features = false
 features = [ "serenity-rustls", "driver", "gateway", "builtin-queue" ]
 

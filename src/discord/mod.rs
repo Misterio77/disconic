@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use log::warn;
 use serenity::{
     async_trait,
     client::{Context, EventHandler},
@@ -6,7 +7,7 @@ use serenity::{
         macros::{command, group, hook},
         Args, CommandResult,
     },
-    model::channel::Message,
+    model::{channel::Message, gateway::Ready},
     prelude::Mutex,
     utils::MessageBuilder,
 };
@@ -33,7 +34,11 @@ pub struct General;
 pub struct Handler;
 
 #[async_trait]
-impl EventHandler for Handler {}
+impl EventHandler for Handler {
+    async fn ready(&self, _: Context, ready: Ready) {
+        println!("{} is connected!", ready.user.name);
+    }
+}
 
 #[hook]
 pub async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: CommandResult) {
@@ -45,7 +50,7 @@ pub async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: Com
 
 #[command]
 async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
     let manager = songbird::get(ctx)
@@ -58,7 +63,7 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn join(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
     let channel = guild
@@ -306,7 +311,6 @@ async fn queue_song(
 ) -> Result<()> {
     let guild = msg
         .guild(&ctx.cache)
-        .await
         .ok_or_else(|| anyhow!("Couldn't get guild id"))?;
     let manager = songbird::get(ctx)
         .await
@@ -343,7 +347,6 @@ async fn queue_song(
 async fn get_handler(ctx: &Context, msg: &Message) -> Result<Arc<Mutex<Call>>> {
     let guild = msg
         .guild(&ctx.cache)
-        .await
         .ok_or_else(|| anyhow!("Couldn't get guild id"))?;
     let manager = songbird::get(ctx)
         .await

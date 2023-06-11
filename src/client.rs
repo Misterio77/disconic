@@ -1,13 +1,15 @@
 use anyhow::Result;
 use serenity::{
-    client::Client as DiscordClient, framework::standard::StandardFramework, prelude::TypeMapKey,
+    client::Client as DiscordClient,
+    framework::standard::StandardFramework,
+    prelude::{GatewayIntents, TypeMapKey},
 };
 use songbird::SerenityInit;
 use sunk::Client as SubsonicClient;
 
 use std::{env, fs, io};
 
-use crate::discord::{Handler, GENERAL_GROUP, after_hook};
+use crate::discord::{after_hook, Handler, GENERAL_GROUP};
 
 pub struct Client {
     ss_url: String,
@@ -45,17 +47,19 @@ impl Client {
     }
 
     pub async fn discord(&self, ss: SubsonicClient) -> Result<DiscordClient> {
-        Ok(DiscordClient::builder(&self.discord_token)
-            .event_handler(Handler)
-            .framework(
-                StandardFramework::new()
-                    .configure(|c| c.prefix("~"))
-                    .group(&GENERAL_GROUP)
-                    .after(after_hook)
-            )
-            .type_map_insert::<MusicClient>(ss)
-            .register_songbird()
-            .await?)
+        Ok(
+            DiscordClient::builder(&self.discord_token, GatewayIntents::default())
+                .event_handler(Handler)
+                .framework(
+                    StandardFramework::new()
+                        .configure(|c| c.prefix("~"))
+                        .group(&GENERAL_GROUP)
+                        .after(after_hook),
+                )
+                .type_map_insert::<MusicClient>(ss)
+                .register_songbird()
+                .await?,
+        )
     }
 
     pub async fn subsonic(&self) -> Result<SubsonicClient> {

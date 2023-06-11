@@ -2,7 +2,7 @@
   description = "Discord bot for interacting with subsonic music libraries";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
     utils.url = "github:numtide/flake-utils";
   };
 
