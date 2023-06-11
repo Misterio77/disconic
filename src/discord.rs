@@ -94,7 +94,15 @@ async fn song(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .ok_or_else(|| anyhow!("No song matching search found"))?;
 
     log::info!("Found song {song:?}");
-    queue_song(ctx, msg, song, music_client).await?;
+    queue_song(ctx, msg, &song, music_client).await?;
+
+    let message = format!(
+        "Added **{} - {}** to the queue",
+        song.title,
+        song.artist.as_deref().unwrap_or_default(),
+    );
+    msg.reply(&ctx.http, &MessageBuilder::new().push(&message).build())
+        .await?;
 
     Ok(())
 }
@@ -121,9 +129,19 @@ async fn album(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .first()
         .ok_or_else(|| anyhow!("No albums matching search found"))?;
 
-    for song in album.songs(music_client).await? {
-        queue_song(ctx, msg, song, music_client).await?;
+    let songs = album.songs(music_client).await?;
+    for song in songs.iter() {
+        queue_song(ctx, msg, &song, music_client).await?;
     }
+
+    let message = format!(
+        "Added album **{} - {}** ({} songs) to the queue",
+        album.name,
+        album.artist.as_deref().unwrap_or_default(),
+        songs.len(),
+    );
+    msg.reply(&ctx.http, &MessageBuilder::new().push(&message).build())
+        .await?;
 
     Ok(())
 }
@@ -144,22 +162,35 @@ async fn random(ctx: &Context, msg: &Message) -> CommandResult {
         .first()
         .map(ToOwned::to_owned)
         .ok_or_else(|| anyhow!("No song matching search found"))?;
-    queue_song(ctx, msg, song, music_client).await?;
+    queue_song(ctx, msg, &song, music_client).await?;
+
+    let message = format!(
+        "Added **{} - {}** to the queue",
+        song.title,
+        song.artist.as_deref().unwrap_or_default(),
+    );
+    msg.reply(&ctx.http, &MessageBuilder::new().push(&message).build())
+        .await?;
 
     Ok(())
 }
 
 #[command]
 #[only_in(guilds)]
-/// Skip current song
-async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
+/// Skip song(s)
+async fn skip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let call = get_call(ctx, msg).await?;
     let handler = call.lock().await;
+    let n = args.rest().parse().unwrap_or(1);
 
     let queue = handler.queue();
+    for _ in 0..(n - 1) {
+        queue.dequeue(1).ok_or_else(|| anyhow!("Song not found"))?;
+    }
     queue.skip()?;
 
-    msg.reply(&ctx.http, "Song skipped").await?;
+    msg.reply(&ctx.http, &format!("{n} song(s) skipped"))
+        .await?;
 
     Ok(())
 }
@@ -251,12 +282,22 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
         "No songs queued".into()
     } else {
         let mut text = String::new();
-        text.push_str("Next songs in queue:\n");
-        for (i, track) in current_queue.iter().enumerate() {
+        let mut queue = current_queue.iter().enumerate();
+
+        let (_, track) = queue.next().unwrap();
+        let song = get_song(track).await?;
+        text.push_str(&format!(
+            "**Currently playing**: {} - {}\n\n",
+            song.title,
+            song.artist.as_deref().unwrap_or_default()
+        ));
+
+        text.push_str("**Next songs in queue**:\n");
+        for (i, track) in queue {
             let song = get_song(track).await?;
             let song_text = format!(
                 "**{}.** {} - {}",
-                i+1,
+                i,
                 song.title,
                 song.artist.as_deref().unwrap_or_default()
             );
@@ -277,11 +318,11 @@ async fn remove(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let call = get_call(ctx, msg).await?;
     let handler = call.lock().await;
 
-    let index = args.single()?;
+    let index: usize = args.single()?;
 
     let queue = handler.queue();
     let track = queue
-        .dequeue(index)
+        .dequeue(index - 1)
         .ok_or_else(|| anyhow!("Song not found"))?;
     let song = get_song(&track).await?;
     let text = format!("Removed track: {}", song.title);
@@ -298,34 +339,19 @@ impl TypeMapKey for SongHandler {
     type Value = Song;
 }
 
-async fn queue_song(ctx: &Context, msg: &Message, song: Song, client: &sunk::Client) -> Result<()> {
+async fn queue_song(
+    ctx: &Context,
+    msg: &Message,
+    song: &Song,
+    client: &sunk::Client,
+) -> Result<()> {
     let call = get_call(ctx, msg).await?;
     let mut handler = call.lock().await;
 
-    let song_info = format!(
-        "{} - {} ",
-        song.artist.as_deref().unwrap_or_default(),
-        song.title,
-    );
-
-    let track = load_song(&song, client).await?;
+    let track = load_song(song, client).await?;
     let track_handle = handler.enqueue(track).await;
-    {
-        let mut type_map = track_handle.typemap().write().await;
-        type_map.insert::<SongHandler>(song)
-    }
-
-    msg.reply(
-        &ctx.http,
-        &MessageBuilder::new()
-            .push("Added ")
-            .push_bold_safe(song_info)
-            .push("to the queue")
-            // .push("\n")
-            // .push(song.cover_art_url(client, 256)?)
-            .build(),
-    )
-    .await?;
+    let mut type_map = track_handle.typemap().write().await;
+    type_map.insert::<SongHandler>(song.clone());
 
     Ok(())
 }
