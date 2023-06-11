@@ -1,4 +1,4 @@
-{ lib, rustPlatform, pkg-config, autoconf, alsa-lib, automake, libopus, ffmpeg, makeWrapper }:
+{ lib, rustPlatform, pkg-config, libopus }:
 
 let manifest = (lib.importTOML ./Cargo.toml).package;
 in rustPlatform.buildRustPackage {
@@ -7,8 +7,8 @@ in rustPlatform.buildRustPackage {
 
   src = lib.cleanSource ./.;
 
-  nativeBuildInputs = [ pkg-config autoconf automake makeWrapper ];
-  buildInputs = [ alsa-lib libopus ffmpeg ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ libopus ];
 
   cargoLock = {
     lockFile = ./Cargo.lock;
@@ -19,10 +19,6 @@ in rustPlatform.buildRustPackage {
        "poise-0.4.1" = "sha256-MPfg3miu9tesGKChaR8vz8RZA45I5uJs60MtgxDJryw=";
      };
   };
-
-  postFixup = ''
-    wrapProgram $out/bin/disconic --set PATH ${lib.makeBinPath [ ffmpeg ]}
-  '';
 
   meta = with lib; {
     description = manifest.description;

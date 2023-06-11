@@ -41,7 +41,7 @@
       devShells = forAllPkgs (pkgs: {
         default = pkgs.mkShell {
           inputsFrom = [(mkPackage pkgs)];
-          buildInputs = with pkgs; [ clippy rust-analyzer rustc rustfmt ffmpeg ];
+          buildInputs = with pkgs; [ clippy rust-analyzer rustc rustfmt ];
         };
       });
 
