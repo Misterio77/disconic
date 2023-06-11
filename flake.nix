@@ -1,49 +1,35 @@
 {
   description = "Discord bot for interacting with subsonic music libraries";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
-    utils.url = "github:numtide/flake-utils";
+  nixConfig = {
+    extra-substituters = [ "https://cache.m7.rs" ];
+    extra-trusted-public-keys =
+      [ "cache.m7.rs:kszZ/NSwE/TjhOcPPQ16IuUiuRSisdiIwhKZCxguaWg=" ];
   };
 
-  outputs = { self, nixpkgs, utils }:
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
+
+  outputs = { self, nixpkgs }:
     let
-      name = "disconic";
-      overlay = final: prev: {
-        ${name} = final.callPackage ./default.nix { };
+      forAllSystems = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ];
+      forAllPkgs = f: forAllSystems (sys: f pkgsFor.${sys});
+      pkgsFor = nixpkgs.legacyPackages;
+    in {
+      nixosModules.default = import ./module.nix;
+
+      overlays.default = final: _prev: {
+        disconic = final.callPackage ./default.nix { };
       };
-      overlays = [ overlay ];
-    in
-    rec {
-      inherit overlay overlays;
 
-      nixosModules."${name}" = import ./module.nix;
-      nixosModule = nixosModules."${name}";
-    } //
-    (utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = (import nixpkgs { inherit system overlays; });
-      in
-      rec {
-        # nix build
-        packages.${name} = pkgs.${name};
-        defaultPackage = packages.${name};
+      packages = forAllPkgs (pkgs: {
+        default = pkgs.callPackage ./default.nix { };
+      });
 
-        # nix run
-        apps.${name} = utils.lib.mkApp { drv = packages.${name}; };
-        defaultApp = apps.${name};
+      devShells = forAllPkgs (pkgs: {
+        inputsFrom = [( pkgs.callPackage ./default.nix { })];
+        buildInputs = with pkgs; [ clippy rust-analyzer rustc rustfmt ];
+      });
 
-        # nix develop
-        devShell = pkgs.mkShell {
-          inputsFrom = [ defaultPackage ];
-          buildInputs = with pkgs;
-            [
-              clippy
-              rust-analyzer
-              rustc
-              rustfmt
-            ];
-        };
-      }
-    ));
+      hydraJobs = self.outputs.packages;
+    };
 }
