@@ -21,13 +21,14 @@
         disconic = final.callPackage ./default.nix { };
       };
 
-      packages = forAllPkgs (pkgs: {
-        default = pkgs.callPackage ./default.nix { };
-      });
+      packages =
+        forAllPkgs (pkgs: { default = pkgs.callPackage ./default.nix { }; });
 
       devShells = forAllPkgs (pkgs: {
-        inputsFrom = [( pkgs.callPackage ./default.nix { })];
-        buildInputs = with pkgs; [ clippy rust-analyzer rustc rustfmt ];
+        default = pkgs.mkShell {
+          inputsFrom = [ self.outputs.packages.${pkgs.system}.default ];
+          buildInputs = with pkgs; [ clippy rust-analyzer rustc rustfmt ];
+        };
       });
 
       hydraJobs = self.outputs.packages;
