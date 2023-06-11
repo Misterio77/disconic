@@ -1,16 +1,10 @@
-use crate::handles::SubsonicClientHandle;
+use crate::discord;
 use anyhow::{Context as ErrContext, Result};
 use clap::Parser;
 use log::LevelFilter;
-use serenity::{
-    client::Client as DiscordClient, framework::standard::StandardFramework,
-    prelude::GatewayIntents,
-};
+use serenity::client::Client as DiscordClient;
 use simple_logger::SimpleLogger;
-use songbird::SerenityInit;
 use sunk::Client as SubsonicClient;
-
-use crate::discord::{after_hook, Handler, GENERAL_GROUP};
 
 #[derive(Parser, Clone)]
 pub struct Config {
@@ -20,6 +14,8 @@ pub struct Config {
     subsonic_user: String,
     #[clap(long, env = "DISCONIC_SUBSONIC_PASSWORD")]
     subsonic_password: String,
+    #[clap(long, env = "DISCONIC_DISCORD_GUILD")]
+    discord_guild: Option<u64>,
     #[clap(long, env = "DISCONIC_DISCORD_TOKEN")]
     discord_token: String,
     #[clap(long, env = "DISCONIC_LOG_LEVEL", default_value = "warn")]
@@ -27,22 +23,8 @@ pub struct Config {
 }
 
 impl Config {
-    pub async fn discord(&self, ss: SubsonicClient) -> Result<DiscordClient> {
-        let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-        let framework = StandardFramework::new()
-            .group(&GENERAL_GROUP)
-            .after(after_hook);
-
-        framework.configure(|c| c.prefix("~"));
-
-        let client = DiscordClient::builder(&self.discord_token, intents)
-            .event_handler(Handler)
-            .framework(framework)
-            .type_map_insert::<SubsonicClientHandle>(ss)
-            .register_songbird()
-            .await?;
-
-        Ok(client)
+    pub async fn discord(&self, subsonic_client: SubsonicClient) -> Result<DiscordClient> {
+        discord::create_client(&self.discord_token, self.discord_guild, subsonic_client).await
     }
 
     pub async fn subsonic(&self) -> Result<SubsonicClient> {
