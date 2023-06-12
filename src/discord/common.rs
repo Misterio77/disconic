@@ -1,5 +1,8 @@
 use anyhow::{anyhow, Result};
-use serenity::all::{ChannelId, Guild};
+use serenity::{
+    all::{ChannelId, Guild},
+    prelude::TypeMapKey,
+};
 use songbird::{
     input::HttpRequest,
     tracks::{Track, TrackHandle},
@@ -10,7 +13,10 @@ use tokio::sync::Mutex;
 
 use std::sync::Arc;
 
-use crate::handles::SubsonicSongHandle;
+pub struct SongHandle;
+impl TypeMapKey for SongHandle {
+    type Value = Song;
+}
 
 pub struct Data {
     pub subsonic_client: sunk::Client,
@@ -24,7 +30,7 @@ pub async fn queue_song(ctx: Context<'_>, song: &Song, client: &sunk::Client) ->
     let track = load_song(song, client).await?;
     let track_handle = handler.enqueue(track).await;
     let mut type_map = track_handle.typemap().write().await;
-    type_map.insert::<SubsonicSongHandle>(song.clone());
+    type_map.insert::<SongHandle>(song.clone());
 
     Ok(())
 }
@@ -70,7 +76,7 @@ pub async fn get_song(track: &TrackHandle) -> Result<Song> {
         .typemap()
         .read()
         .await
-        .get::<SubsonicSongHandle>()
+        .get::<SongHandle>()
         .map(ToOwned::to_owned)
         .ok_or_else(|| anyhow!("Sound information not found"))?;
     Ok(song)
