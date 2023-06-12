@@ -46,11 +46,11 @@ With nix, you don't even need to clone the repo. Simply replace `.` with `github
 
 ## Usage
 
-Start by creating a discord app, getting its bot token, and inviting it to your server. Also get your guild (server) ID. These steps are already documented elsewhere, so will not be covered here.
+Start by creating a discord app and getting its bot token. Also get your guild (server) ID. These steps are already documented elsewhere, so will not be covered here.
 
-You can configure the application through CLI arguments (very convenient) or environment variables (better for deployments, dotenv is also supported). Use `--help` to see what the arguments or environment variables are.
+You can configure the application through CLI arguments or environment variables. Use `--help` to see what the arguments and environment variables are.
 
-Simply run the binary and everything will be setup for you. The bot will automatically register its commands on your server (if guild_id is set). If you don't see the commands, try sending a message mentioning the bot and `register` (all commands can be ran like that, too).
+Simply run the binary and everything will be setup for you. If your bot is not a member of the guild, disconic will error out and print the invitation URL. The bot will also automatically register its slash commands on your server whenever it starts.
 
 ## Usage
 

@@ -15,7 +15,7 @@ pub struct Config {
     #[clap(long, env = "DISCONIC_SUBSONIC_PASSWORD")]
     subsonic_password: String,
     #[clap(long, env = "DISCONIC_DISCORD_GUILD")]
-    discord_guild: Option<u64>,
+    discord_guild: u64,
     #[clap(long, env = "DISCONIC_DISCORD_TOKEN")]
     discord_token: String,
     #[clap(long, env = "DISCONIC_LOG_LEVEL", default_value = "warn")]

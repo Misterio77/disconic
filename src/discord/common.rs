@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context as ErrContext, Result};
 use serenity::{
     all::{ChannelId, Guild},
     prelude::TypeMapKey,
@@ -36,9 +36,9 @@ pub async fn queue_song(ctx: Context<'_>, song: &Song, client: &sunk::Client) ->
 }
 
 pub fn get_guild(ctx: Context<'_>) -> Guild {
-    let guild = ctx.guild().expect("No guild!").clone();
-    log::info!("Got guild: {guild:?}");
-    guild
+    ctx.guild()
+        .expect("Invalid (or no) guild configured!")
+        .to_owned()
 }
 
 pub fn get_channel(ctx: Context<'_>) -> Result<ChannelId> {
@@ -47,52 +47,45 @@ pub fn get_channel(ctx: Context<'_>) -> Result<ChannelId> {
         .voice_states
         .get(&ctx.author().id)
         .ok_or_else(|| anyhow!("You must be in a voice channel to use this command"))?;
-    let channel = voice_state
+    voice_state
         .channel_id
-        .ok_or_else(|| anyhow!("You must be in a voice channel to use this command"))?;
-
-    Ok(channel)
+        .ok_or_else(|| anyhow!("You must be in a voice channel to use this command"))
 }
 
 pub async fn get_call(ctx: Context<'_>) -> Result<Arc<Mutex<songbird::Call>>> {
     let manager = get_manager(ctx).await?;
     let guild = get_guild(ctx);
-    let call = manager.get(guild.id);
-
-    if let Some(c) = call {
-        Ok(c)
-    } else {
-        let channel = get_channel(ctx)?;
-        log::warn!("Not in a voice channel, trying to join {channel}");
-        let _handler = manager.join(guild.id, channel).await;
-        manager
-            .get(guild.id)
-            .ok_or_else(|| anyhow!("Not in a voice channel, try running 'join'"))
+    match manager.get(guild.id) {
+        Some(c) => Ok(c),
+        None => {
+            let channel = get_channel(ctx)?;
+            log::warn!("Not in a voice channel, trying to join {channel}");
+            manager
+                .join(guild.id, channel)
+                .await
+                .context("Couldn't join voice channel. Try running 'join' manually.")
+        }
     }
 }
 
 pub async fn get_song(track: &TrackHandle) -> Result<Song> {
-    let song = track
+    track
         .typemap()
         .read()
         .await
         .get::<SongHandle>()
         .map(ToOwned::to_owned)
-        .ok_or_else(|| anyhow!("Sound information not found"))?;
-    Ok(song)
+        .ok_or_else(|| anyhow!("Sound information not found"))
 }
 
 pub async fn get_manager(ctx: Context<'_>) -> Result<Arc<Songbird>> {
-    let manager = songbird::get(ctx.discord())
+    songbird::get(ctx.discord())
         .await
-        .ok_or_else(|| anyhow!("Couldn't start manager"))?;
-    log::info!("Got manager: {manager:?}");
-    Ok(manager)
+        .ok_or_else(|| anyhow!("Couldn't start manager"))
 }
 
 pub async fn load_song(song: &Song, client: &sunk::Client) -> Result<Track> {
-    log::info!("Loading song {song:?}");
     let url = song.stream_url(client)?;
-    let track: Track = HttpRequest::new(client.reqclient.clone(), url).into();
+    let track = HttpRequest::new(client.reqclient.clone(), url).into();
     Ok(track)
 }
