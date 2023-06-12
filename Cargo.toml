@@ -3,9 +3,10 @@ name = "disconic"
 description = "Discord bot for interacting with subsonic music libraries"
 version = "1.0.0"
 authors = [ "Gabriel Fontes <eu@misterio.me>" ]
-edition = "2018"
+edition = "2021"
 homepage = "https://misterio.me"
 license = "AGPL-3.0-or-later"
+rust-version = "1.70.0"
 
 
 [patch.crates-io.sunk]

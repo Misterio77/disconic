@@ -10,7 +10,7 @@ I use `sunk` to interact with subsonic, and `serenity`/`poise` to interact with 
 
 You need `rustc` >= 1.70 to compile this crate. Use `rustup` to get it.
 
-The only crate with non-rust dependencies is `audiopus_sys`, this means you need `libopus` installed to run this. If building, you'll also need `cmake` and `pkg-config`. Consult your distro's documentation on how to get these.
+The only crate with non-rust dependencies is `audiopus_sys`, this means you need `libopus` installed to run this. If building, you'll also need `pkg-config`. Consult your distro's documentation on how to get these.
 
 You can quickly get everything you need with nix:
 
