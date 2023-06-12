@@ -54,15 +54,15 @@ in {
       serviceConfig = {
         Restart = "always";
         User = cfg.user;
-        ExecStart = lib.escapeShellArgs ([
-          (lib.getExe cfg.package)
-          "--subsonic-url=${cfg.subsonicUrl}"
-          "--subsonic-user=${cfg.subsonicUser}"
-          "--subsonic-password=$(cat ${cfg.subsonicPasswordFile})"
-          "--discord-token=$(cat ${cfg.discordTokenFile})"
-          "--discord-guild=${cfg.discordGuild}"
-        ] ++ cfg.extraArgs);
       };
+      script = lib.escapeShellArgs ([
+        (lib.getExe cfg.package)
+        "--subsonic-url=${cfg.subsonicUrl}"
+        "--subsonic-user=${cfg.subsonicUser}"
+        "--subsonic-password=$(cat ${cfg.subsonicPasswordFile})"
+        "--discord-token=$(cat ${cfg.discordTokenFile})"
+        "--discord-guild=${cfg.discordGuild}"
+      ] ++ cfg.extraArgs);
     };
 
     users = {
