@@ -20,26 +20,12 @@ in {
       description = "Service user that will run the daemon.";
     };
 
-    subsonicUrl = mkOption {
-      type = types.str;
-      description = "Subsonic library base API URL";
-    };
-    subsonicUser = mkOption {
-      type = types.str;
-      description = "Subsonic user login";
-    };
-    subsonicPasswordFile = mkOption {
+    environmentFile = mkOption {
       type = types.path;
-      description = "File path containing subsonic user password";
+      default = null;
+      description = "File path containing environment variables.";
     };
-    discordTokenFile = mkOption {
-      type = types.path;
-      description = "File path containing discord token";
-    };
-    discordGuild = mkOption {
-      type = types.str;
-      description = "Your server's guild ID, to auto-register commands";
-    };
+
     extraArgs = mkOption {
       type = types.listOf types.str;
       default = [ ];
@@ -54,15 +40,9 @@ in {
       serviceConfig = {
         Restart = "always";
         User = cfg.user;
+        EnvironmentFile = lib.mkIf (cfg.environmentFile != null) cfg.environmentFile;
       };
-      script = lib.escapeShellArgs ([
-        (lib.getExe cfg.package)
-        "--subsonic-url=${cfg.subsonicUrl}"
-        "--subsonic-user=${cfg.subsonicUser}"
-        "--subsonic-password=$(cat ${cfg.subsonicPasswordFile})"
-        "--discord-token=$(cat ${cfg.discordTokenFile})"
-        "--discord-guild=${cfg.discordGuild}"
-      ] ++ cfg.extraArgs);
+      script = (lib.getExe cfg.package) + (lib.escapeShellArg cfg.extraArgs);
     };
 
     users = {
