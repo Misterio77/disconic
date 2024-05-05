@@ -8,23 +8,17 @@
   };
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
+    systems.url = "github:nix-systems/default";
   };
 
-  outputs = { self, nixpkgs, rust-overlay }:
+  outputs = { self, nixpkgs, systems }:
     let
-      forAllSystems = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ];
+      forAllSystems = nixpkgs.lib.genAttrs (import systems);
       forAllPkgs = f: forAllSystems (sys: f pkgsFor.${sys});
       pkgsFor = nixpkgs.legacyPackages;
 
-      mkPackage = pkgs: pkgs.callPackage ./default.nix {
-        rustPlatform = pkgs.makeRustPlatform rec {
-          rustc = rust-overlay.packages.${pkgs.system}.rust;
-          cargo = rustc;
-        };
-      };
+      mkPackage = pkgs: pkgs.callPackage ./default.nix { };
     in {
       nixosModules.default = import ./module.nix;
 
